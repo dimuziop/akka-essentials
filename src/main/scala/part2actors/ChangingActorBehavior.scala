@@ -49,8 +49,8 @@ object ChangingActorBehavior extends App {
     }
 
     def sadReceive: Receive = {
-      case Food(VEGETABLE) => context.become(sadReceive, false)//stay sad
-      case Food(CHOCOLATE) => context.unbecome()///change to happy
+      case Food(VEGETABLE) => context.become(sadReceive, false) //stay sad
+      case Food(CHOCOLATE) => context.unbecome() ///change to happy
       case Ask(_) => sender() ! KidReject
     }
 
@@ -97,6 +97,110 @@ object ChangingActorBehavior extends App {
 
   //mom ! MomStart(fussyKid)
   mom ! MomStart(sFussyKid)
+
+
+  /**
+   * Exercises
+   * 1 - recreate the Counter Actor with context.become and NO MUTABLE STATE
+   */
+
+  object Counter {
+
+    case object Increment
+
+    case object Decrement
+
+    case object Print
+
+  }
+
+  class Counter extends Actor {
+
+    import Counter._
+
+    override def receive: Receive = countReceive(0)
+
+    def countReceive(currentCount: Int): Receive = {
+      case Increment => context.become(countReceive(currentCount + 1))
+      case Decrement => context.become(countReceive(currentCount - 1))
+      case Print => println(s"My current count is $currentCount")
+    }
+  }
+
+  import Counter._
+
+  val counter = system.actorOf(Props[Counter], "theCounter")
+
+  val state: Int = 0
+
+  (1 to 5) foreach (_ => counter ! Increment)
+  (1 to 3) foreach (_ => counter ! Decrement)
+
+  counter ! Print
+
+
+  /**
+   * Exercises
+   * 2 - simplified voting system
+   */
+
+  case class Vote(candidate: String)
+
+  case object VoteStatusRequest
+
+  case class VoteStatusReply(candidate: Option[String])
+
+  class Citizen extends Actor {
+
+    override def receive: Receive = poll(None)
+
+    def poll(name: Option[String]): Receive = {
+      case Vote(candidate) => context.become(poll(Option(candidate)))
+      case VoteStatusRequest => sender() ! VoteStatusReply(name)
+    }
+  }
+
+  case class AggregateVotes(citizens: Set[ActorRef])
+
+  class VoteAggregator extends Actor {
+
+    override def receive: Receive = pollOpen(Map())
+
+    def pollOpen(value: Map[String, Int]): Receive = {
+      case VoteStatusReply(candidate) =>
+        if (candidate.isEmpty) context.become(pollOpen(value))
+        else {
+          if (!value.contains(candidate.get)) pollOpen(value ++ Map((candidate.get, 1)))
+          else pollOpen(value ++ Map((candidate.get, value(candidate.get) + 1)))
+        }
+      case AggregateVotes(voters: Set[ActorRef]) =>
+        if (voters.isEmpty) println(value)
+        else {
+          voters.head ! VoteStatusRequest
+          sender() ! AggregateVotes(voters.tail)
+        }
+    }
+  }
+
+  val lisa = system.actorOf(Props[Citizen], "Lisa")
+  val bart = system.actorOf(Props[Citizen], "Bart")
+  val bort = system.actorOf(Props[Citizen], "Bort")
+  val abel = system.actorOf(Props[Citizen], "Abel")
+
+  lisa ! Vote("Martin")
+  bart ! Vote("Jonas")
+  bort ! Vote("Roland")
+  abel ! Vote("Roland")
+
+  val voteAggregator = system.actorOf(Props[VoteAggregator], "voteAggregator")
+  voteAggregator ! AggregateVotes(Set(lisa, bart, bort, abel))
+
+  /**
+   * Print the status of the votes
+   * Martin -> 1
+   * Jonas -> 1
+   * Roland -> 2
+   */
 
 
 }
