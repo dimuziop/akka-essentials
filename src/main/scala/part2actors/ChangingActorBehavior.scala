@@ -170,14 +170,20 @@ object ChangingActorBehavior extends App {
       case VoteStatusReply(candidate) =>
         if (candidate.isEmpty) context.become(pollOpen(value))
         else {
-          if (!value.contains(candidate.get)) pollOpen(value ++ Map((candidate.get, 1)))
-          else pollOpen(value ++ Map((candidate.get, value(candidate.get) + 1)))
+          if (!value.contains(candidate.get)) {
+            context.become(pollOpen(value ++ Map((candidate.get, 1))))
+          }
+          else  {
+            context.become(pollOpen(value ++ Map((candidate.get, value(candidate.get) + 1))))
+          }
         }
       case AggregateVotes(voters: Set[ActorRef]) =>
-        if (voters.isEmpty) println(value)
-        else {
+        if (voters.isEmpty) {
+          Thread.sleep(1000)
+          println(value)
+        } else {
           voters.head ! VoteStatusRequest
-          sender() ! AggregateVotes(voters.tail)
+          self ! AggregateVotes(voters.tail)
         }
     }
   }
@@ -186,14 +192,16 @@ object ChangingActorBehavior extends App {
   val bart = system.actorOf(Props[Citizen], "Bart")
   val bort = system.actorOf(Props[Citizen], "Bort")
   val abel = system.actorOf(Props[Citizen], "Abel")
+  val moe = system.actorOf(Props[Citizen], "Moe")
 
   lisa ! Vote("Martin")
   bart ! Vote("Jonas")
   bort ! Vote("Roland")
   abel ! Vote("Roland")
+  moe ! Vote("Roland")
 
   val voteAggregator = system.actorOf(Props[VoteAggregator], "voteAggregator")
-  voteAggregator ! AggregateVotes(Set(lisa, bart, bort, abel))
+  voteAggregator ! AggregateVotes(Set(lisa, bart, bort, abel, moe))
 
   /**
    * Print the status of the votes
